@@ -1,5 +1,32 @@
 # Agent Swimlane
 
+**A local, read-only workspace for exploring and comparing AI agent histories.**
+
+Agent Swimlane turns Codex and Claude Code transcripts into interactive swimlanes and a cross-session analytics dashboard. Inspect model responses, tool calls, linked sub-agents, token usage, and workflow timing without uploading transcripts or calling a model API.
+
+![Agent Swimlane session explorer showing agent timelines, tool activity, communication, and token charts](docs/session_snapshot.png)
+
+*Follow a session across parallel agent lanes, then select any event to inspect its recorded evidence.*
+
+## What you can explore
+
+- **Interactive timelines** with zoom, pan, turn navigation, communication arrows, and idle-gap compression.
+- **Cross-session analytics** for activity, tokens, tools, models, collaboration, and observed workflow time.
+- **Evidence-level inspection** with event provenance, tool arguments and returns, usage counters, and a searchable ledger.
+- **Local, configurable imports** from Codex and Claude Code, with optional content masking.
+- **Portable offline packages** that preserve the complete viewer in a single HTML file.
+
+## Quick start
+
+Python is the only runtime requirement for the viewer and importer. From this folder:
+
+```powershell
+python -m pip install -r requirements.txt
+python serve.py
+```
+
+Open **http://127.0.0.1:8765**. You can also double-click `start-viewer.cmd` on Windows. The server binds only to loopback; stop it with Ctrl+C. To use another port, edit `server.port` in `config.yaml` and restart the server.
+
 ## Portable local import and anonymization
 
 Copy the application folder to another computer with Python installed, install `requirements.txt`, then launch `python serve.py`. Click **Scan new sessions** in the sidebar for an incremental scan, or **Refresh all sessions** to rebuild from source. Settings and selection filters live in `config.yaml`. The server detects available Codex and Claude Code history under the current user's home directory and scans all eligible cases, with progress for scanning, extraction, and anonymization. This detects saved history, not whether a CLI executable is installed. No account login or model call is required. The web UI must be served by `serve.py`, not a generic static server, for the import button to work.
@@ -10,9 +37,9 @@ Content masking is optional and disabled by default for local imports. Enable **
 
 This preserves profiling structure rather than semantic command content. For example, `{"cmd":"read private.txt","timeout":30}` retains the keys, timeout, and string length but masks the command string. Absolute timestamps, numeric values, punctuation, tool names and usage patterns remain potentially identifying; the export is masked profiling data, not a guarantee of irreversible statistical anonymization. Existing raw histories are never changed.
 
-A local, read-only explorer of real agent history. The first adapter reads Codex `.jsonl` and `.jsonl.zst` rollouts; the viewer consumes a harness-independent JSON format.
+The Codex adapter reads `.jsonl` and `.jsonl.zst` rollouts; the viewer consumes a harness-independent JSON format. The Claude Code importer reads local CLI transcripts from `~/.claude/projects` (configure `import.sources.claude.home`). It selects eligible Claude cases using the configured thresholds and limit. `swimlane/mapping.py` handles provider naming and inclusive token accounting; adapters emit common events and `swimlane/cases.py` assembles cases. Claude response blocks are deduplicated by message ID with maximum reported counters; cached reads and writes are added to its uncached input to match the common input-total convention. Child transcripts without verified linkage are not attached.
 
-The importer now also reads local Claude Code CLI transcripts from `~/.claude/projects` (configure `import.sources.claude.home`). It selects eligible Claude cases using the configured thresholds and limit. `swimlane/mapping.py` handles provider naming and inclusive token accounting; adapters emit common events and `swimlane/cases.py` assembles cases. Claude response blocks are deduplicated by message ID with maximum reported counters; cached reads and writes are added to its uncached input to match the common input-total convention. Child transcripts without verified linkage are not attached.
+## Interactive session explorer
 
 The timeline is compact: GPU/model-wait hatching, CPU/tool blue, and other activity colors appear inside each agent lane. Toggle the alignment cursor to follow a vertical line. Drag to pan, Shift-drag across a time range to zoom, use the wheel to zoom around the pointer, and double-click to reset. Keyboard/button zoom controls remain available.
 
@@ -20,19 +47,17 @@ Axis ticks and the alignment cursor show `T`, `T + 30 s`, or `T + 2 m`, anchored
 
 **First collaboration** selects the first child-agent task window. **All turns** resets to the complete case. **Net time** (on by default) excludes long gaps between observations, including silence inside a tool call or an open turn. The threshold is `timing.silence_seconds` in `config.yaml` (120 seconds by default; applied to new imports). A gap is removed only when no other agent retains observed activity across it. Inferred stalls remain **Other / inferred stall (out of scope)** with Net time off. Silence can mean machine sleep, approval, remote waiting, or unobserved computation; its cause is unknown. Original tool boundaries and timestamps are preserved. This is workflow accounting, never measured CPU/GPU utilization.
 
+## Cross-session summary
+
+![Agent Swimlane summary dashboard showing token composition, tool rankings, workflow time, collaboration, and model usage](docs/summary_snapshot.png)
+
+*Compare patterns across the entire local database rather than inspecting one transcript at a time.*
+
 Use **Summary** to explore KPI cards, daily/weekly/monthly activity, cached/uncached input and output composition, tool rankings, workflow time, collaboration, recorded models, and a sortable session leaderboard. Harness and snapshot-relative time filters narrow the whole dashboard; activity can be switched between responses, tools, tokens, and sessions. Cached input and reasoning output remain subsets of their respective totals. **Refresh data** scans normalized case JSON files directly in the configured data directory, including files copied there without index entries. Duplicate harness/session IDs count once; independent exports need unique session IDs. File/import errors are counted; malformed datasets are skipped. Summary refresh does not import local history. Offline packages refresh their embedded snapshot only. Toggle **Dark mode** in the header; the preference is saved locally when browser storage is available.
 
 Read the [architecture explanation](docs/architecture.md) for the principles, data flow, record reconstruction, and processing-indicator algorithm.
 
-## Open the viewer
-
-From this folder:
-
-```powershell
-python serve.py
-```
-
-Open **http://127.0.0.1:8765**. You can also double-click `start-viewer.cmd`. The server binds only to loopback. Stop it with Ctrl+C. For another port, edit `server.port` in `config.yaml` and restart the server.
+## Import and regenerate cases
 
 The imported cases are already in `data/`. To regenerate them:
 
