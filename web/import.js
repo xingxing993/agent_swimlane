@@ -1,5 +1,6 @@
 'use strict';
 const importButton=document.getElementById('importButton');
+const rebuildButton=document.getElementById('rebuildButton');
 const importProgress=document.getElementById('importProgress');
 let importPolling=false;
 async function requireImportServer(){
@@ -19,7 +20,7 @@ async function watchImport(){
       const response=await fetch('/api/import');
       if(!response.ok)throw Error('Import status unavailable. Start the viewer with python serve.py.');
       state=await response.json();
-      importButton.disabled=state.status==='running';
+      importButton.disabled=rebuildButton.disabled=state.status==='running';
       importProgress.textContent=state.stage||'';
       if(state.status==='running'){
         const progress=document.createElement('progress');
@@ -34,21 +35,23 @@ async function watchImport(){
       location.reload();
     }
   }catch(error){importProgress.textContent=error.message;}
-  finally{importButton.disabled=false;importPolling=false;}
+  finally{importButton.disabled=rebuildButton.disabled=false;importPolling=false;}
 }
-importButton.addEventListener('click',async()=>{
-  importButton.disabled=true;
+async function startImport(mode){
+  importButton.disabled=rebuildButton.disabled=true;
   importProgress.textContent='Detecting local harness history…';
   try{
     await requireImportServer();
-    const response=await fetch('/api/import',{method:'POST',headers:{'X-Swimlane-Import':'1','Content-Type':'application/json'},body:JSON.stringify({scramble:document.getElementById('scrambleImport').checked})});
+    const response=await fetch('/api/import',{method:'POST',headers:{'X-Swimlane-Import':'1','Content-Type':'application/json'},body:JSON.stringify({mode,scramble:document.getElementById('scrambleImport').checked})});
     if(!response.ok&&response.status!==409){
       const detail=await response.json().catch(()=>({}));
       throw Error(`Could not start local import (HTTP ${response.status}). ${detail.error||'Restart python serve.py and refresh the page.'}`);
     }
     await watchImport();
-  }catch(error){importProgress.textContent=error.message;importButton.disabled=false;}
-});
+  }catch(error){importProgress.textContent=error.message;importButton.disabled=rebuildButton.disabled=false;}
+}
+importButton.addEventListener('click',()=>startImport('incremental'));
+rebuildButton.addEventListener('click',()=>startImport('full'));
 
 document.getElementById('packageButton').addEventListener('click',async()=>{
  const button=document.getElementById('packageButton');button.disabled=true;

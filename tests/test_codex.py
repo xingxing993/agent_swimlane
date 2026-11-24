@@ -15,6 +15,16 @@ def usage(n):
 
 
 class AdapterTests(unittest.TestCase):
+    def test_explicit_event_model_overrides_context(self):
+        path=self.write('model.jsonl',[
+            event('session_meta',dict(id='model-session')),
+            event('turn_context',dict(turn_id='t',model='context-model'),1),
+            event('token_usage_record',dict(response_id='r',model='called-model',usage=usage(10)),2),
+            event('response_item',dict(type='function_call',name='exec',call_id='c',arguments='{}'),3)])
+        result=normalize(path)
+        self.assertEqual(result['rounds'][0]['model'],'called-model')
+        self.assertEqual(result['spans'][0]['model'],'context-model')
+
     def setUp(self):
         self.scratch = pathlib.Path(__file__).resolve().parents[1]/".runtime"/"tests"
         self.scratch.mkdir(parents=True, exist_ok=True)
@@ -120,7 +130,7 @@ class ImportedDataTests(unittest.TestCase):
                         self.assertLessEqual(activity["end"], turn["end"])
                     if activity["resource"] == "gpu":
                         self.assertEqual(activity["confidence"], "inferred")
-                if case.get("anonymization"):
+                if case.get("anonymization") or a.get("harness") != "codex" or not pathlib.Path(source).exists():
                     continue
                 records = [e["payload"] for e in read_events(pathlib.Path(source)) if e["type"] == "token_usage_record"]
                 if records:

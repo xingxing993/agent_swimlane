@@ -129,7 +129,7 @@ def normalize(path):
     def base(e, kind, label, text="", **extra):
         text = clean(text)
         return {"id": f"{sid}:{e['line']}:{kind}", "agent_id": sid, "kind": kind, "label": label,
-                "time": millis(e.get("timestamp")), "turn_id": current_turn, "model": current_model,
+                "time": millis(e.get("timestamp")), "turn_id": current_turn, "model": (e.get("payload") or {}).get("model") or current_model,
                 "text": text[:PREVIEW_LIMIT], "text_length": len(text), "truncated": len(text) > PREVIEW_LIMIT,
                 "source": {"file": str(path), "line": e["line"], "ordinal": e.get("ordinal"), "type": e["type"]},
                 "confidence": "reported", **extra}

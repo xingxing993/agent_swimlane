@@ -13,6 +13,19 @@ def agent():
 
 
 class ActivityTests(unittest.TestCase):
+    def test_overnight_tool_is_inferred_stall_preserving_raw_envelope(self):
+        a=agent(); a['turns'][0]['end']=1000000
+        a['spans']=[record('long','tool',25,999900)]
+        a['rounds']=[record('r','round',1000000)]
+        spans=derive_activity(a)
+        stalls=[s for s in spans if s['phase']=='stall']
+        self.assertEqual(sum(s['end']-s['start'] for s in stalls),999875)
+        self.assertTrue(all(s['resource']=='other' and s['confidence']=='inferred' for s in stalls))
+        self.assertEqual(a['spans'][0]['end'],999900)
+        # Frequent nested evidence prevents classifying a long wrapper as silence.
+        a['messages']=[record(str(i),'text',i*100000) for i in range(1,10)]
+        self.assertFalse(any(s['phase']=='stall' for s in derive_activity(a)))
+
     def test_tool_subtracted_from_model_window_without_double_counting(self):
         a=agent()
         a["spans"].append(record("nested","execution",28,45))

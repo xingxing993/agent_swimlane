@@ -21,7 +21,12 @@ class ServerTests(unittest.TestCase):
                 request=urllib.request.Request(base+'/api/import',data=b'{"scramble":false}',headers={'X-Swimlane-Import':'1','Content-Type':'application/json','Origin':base},method='POST')
                 with urllib.request.urlopen(request) as response:
                     self.assertEqual(response.status,202)
-                start.assert_called_once_with(False)
+                start.assert_called_once_with(False,'incremental')
+            with patch.object(JOBS,'start',return_value=True) as start:
+                request=urllib.request.Request(base+'/api/import',data=b'{"mode":"full"}',headers={'X-Swimlane-Import':'1','Content-Type':'application/json'},method='POST')
+                with urllib.request.urlopen(request) as response:
+                    self.assertEqual(response.status,202)
+                start.assert_called_once_with(False,'full')
         finally:
             server.shutdown()
             server.server_close()

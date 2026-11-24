@@ -2,23 +2,25 @@
 
 ## Portable local import and anonymization
 
-Copy the application folder to another computer with Python installed, install `requirements.txt`, then launch `python serve.py`. Click **Import local history** in the sidebar. The server detects available Codex and Claude Code history under the current user's home directory and scans all eligible cases, with progress for scanning, extraction, and anonymization. This detects saved history, not whether a CLI executable is installed. No account login or model call is required. The web UI must be served by `serve.py`, not a generic static server, for the import button to work.
+Copy the application folder to another computer with Python installed, install `requirements.txt`, then launch `python serve.py`. Click **Scan new sessions** in the sidebar for an incremental scan, or **Refresh all sessions** to rebuild from source. Settings and selection filters live in `config.yaml`. The server detects available Codex and Claude Code history under the current user's home directory and scans all eligible cases, with progress for scanning, extraction, and anonymization. This detects saved history, not whether a CLI executable is installed. No account login or model call is required. The web UI must be served by `serve.py`, not a generic static server, for the import button to work.
 
-One import runs at a time. Output is staged under `.runtime/`, optionally scrambled, then published to `data/` with the index replaced last. A failed extraction leaves the previous database usable. Successful import replaces the previous snapshot and removes obsolete case JSON files. Restarting the server interrupts its import worker; retry the import if needed. Failed staging folders may remain under `.runtime/` and should be treated as private source-derived scratch data.
+One import runs at a time. Output is staged under `.runtime/`, optionally scrambled, then published to `data/` with the index replaced last. A failed extraction leaves the previous database usable. Successful import replaces the local-import snapshot and removes obsolete files owned by the previous import index. Unindexed shared datasets are preserved. Incremental scans reuse unchanged source metadata and normalized records using file size and modification time; changed and new files are reread. Full refresh ignores that cache and rereads all configured sources. Restarting the server interrupts its import worker; retry the import if needed. Failed staging folders and the incremental history cache remain under `.runtime/` and contain private source-derived content, even when published output is scrambled. Treat that directory as private scratch data.
 
-Content masking is optional and disabled by default for local imports. Enable **Scramble imported content** for button imports or pass `--anonymize` on the command line. Prose, titles, tool output, and string argument values are replaced with length-preserving letter/digit masks; whitespace and punctuation are preserved. JSON tool argument keys and numeric values, tool names, types, lengths, timing and token counters remain. Session/event IDs and source paths become consistent pseudonyms within the export; the random pseudonym key is not saved. A fresh import generates new pseudonyms. Inspector evidence links continue to resolve. `text_length` and `output_length` describe the original extracted content, including text omitted by the existing preview cap.
+Content masking is optional and disabled by default for local imports. Enable **Scramble imported content** for button imports or set `import.anonymize: true` in `config.yaml`. The one-shot `--anonymize` flag is also available. Prose, titles, tool output, and string argument values are replaced with length-preserving letter/digit masks; whitespace and punctuation are preserved. JSON tool argument keys and numeric values, tool names, types, lengths, timing and token counters remain. Session/event IDs and source paths become consistent pseudonyms within the export; the random pseudonym key is not saved. A fresh import generates new pseudonyms. Inspector evidence links continue to resolve. `text_length` and `output_length` describe the original extracted content, including text omitted by the existing preview cap.
 
 This preserves profiling structure rather than semantic command content. For example, `{"cmd":"read private.txt","timeout":30}` retains the keys, timeout, and string length but masks the command string. Absolute timestamps, numeric values, punctuation, tool names and usage patterns remain potentially identifying; the export is masked profiling data, not a guarantee of irreversible statistical anonymization. Existing raw histories are never changed.
 
 A local, read-only explorer of real agent history. The first adapter reads Codex `.jsonl` and `.jsonl.zst` rollouts; the viewer consumes a harness-independent JSON format.
 
-The importer now also reads local Claude Code CLI transcripts from `~/.claude/projects` (override with `--claude-home`). It adds up to three recent eligible Claude cases. `swimlane/mapping.py` handles provider naming and inclusive token accounting; adapters emit common events and `swimlane/cases.py` assembles cases. Claude response blocks are deduplicated by message ID with maximum reported counters; cached reads and writes are added to its uncached input to match the common input-total convention. Child transcripts without verified linkage are not attached.
+The importer now also reads local Claude Code CLI transcripts from `~/.claude/projects` (configure `import.sources.claude.home`). It selects eligible Claude cases using the configured thresholds and limit. `swimlane/mapping.py` handles provider naming and inclusive token accounting; adapters emit common events and `swimlane/cases.py` assembles cases. Claude response blocks are deduplicated by message ID with maximum reported counters; cached reads and writes are added to its uncached input to match the common input-total convention. Child transcripts without verified linkage are not attached.
 
 The timeline is compact: GPU/model-wait hatching, CPU/tool blue, and other activity colors appear inside each agent lane. Toggle the alignment cursor to follow a vertical line. Drag to pan, Shift-drag across a time range to zoom, use the wheel to zoom around the pointer, and double-click to reset. Keyboard/button zoom controls remain available.
 
 Axis ticks and the alignment cursor show `T`, `T + 30 s`, or `T + 2 m`, anchored to the case start. With Net time enabled, offsets exclude removed idle gaps; with it disabled they show wall elapsed time. The inspector and ledger retain original calendar timestamps. A click with small mouse movement selects the bar; movement beyond four pixels starts a drag.
 
-**First collaboration** selects the first child-agent task window. **All turns** resets to the complete case. **Net time** (on by default) removes gaps longer than two minutes outside the union of all observed agent turns. A gap marker preserves its omitted duration; hover to inspect. This removes overnight breaks between turns, while retaining waits inside active turns because user inactivity cannot be established there. Disable Net time to restore wall-clock spacing. Turn and event timestamps retain the original dates.
+**First collaboration** selects the first child-agent task window. **All turns** resets to the complete case. **Net time** (on by default) excludes long gaps between observations, including silence inside a tool call or an open turn. The threshold is `timing.silence_seconds` in `config.yaml` (120 seconds by default; applied to new imports). A gap is removed only when no other agent retains observed activity across it. Inferred stalls remain **Other / inferred stall (out of scope)** with Net time off. Silence can mean machine sleep, approval, remote waiting, or unobserved computation; its cause is unknown. Original tool boundaries and timestamps are preserved. This is workflow accounting, never measured CPU/GPU utilization.
+
+Use **Summary** to explore KPI cards, daily/weekly/monthly activity, cached/uncached input and output composition, tool rankings, workflow time, collaboration, recorded models, and a sortable session leaderboard. Harness and snapshot-relative time filters narrow the whole dashboard; activity can be switched between responses, tools, tokens, and sessions. Cached input and reasoning output remain subsets of their respective totals. **Refresh data** scans normalized case JSON files directly in the configured data directory, including files copied there without index entries. Duplicate harness/session IDs count once; independent exports need unique session IDs. File/import errors are counted; malformed datasets are skipped. Summary refresh does not import local history. Offline packages refresh their embedded snapshot only. Toggle **Dark mode** in the header; the preference is saved locally when browser storage is available.
 
 Read the [architecture explanation](docs/architecture.md) for the principles, data flow, record reconstruction, and processing-indicator algorithm.
 
@@ -30,7 +32,7 @@ From this folder:
 python serve.py
 ```
 
-Open **http://127.0.0.1:8765**. You can also double-click `start-viewer.cmd`. The server binds only to loopback. Stop it with Ctrl+C. For another port: `python serve.py --port 8766`.
+Open **http://127.0.0.1:8765**. You can also double-click `start-viewer.cmd`. The server binds only to loopback. Stop it with Ctrl+C. For another port, edit `server.port` in `config.yaml` and restart the server.
 
 The imported cases are already in `data/`. To regenerate them:
 
@@ -39,19 +41,18 @@ python -m pip install -r requirements.txt
 python import_history.py
 ```
 
-The importer reads `~/.codex/sessions` and `~/.codex/archived_sessions`, including compressed history. It never writes to those locations, accesses credentials, or makes model/API calls. It selects five root sessions by default: at least 10 model-issued tool calls and 3 response usage records, prioritizing roots with explicitly linked sub-agents, then recency. The current viewer project is excluded to avoid recursively importing its own build transcript. Internal guardian sessions without explicit parent relationships are not guessed into an agent tree.
+The importer reads the configured source homes and directories without modifying histories or invoking models. `config.yaml` contains source enable flags, discovery patterns, excluded directory components, minimum tool-call/response counts, per-harness limits, explicit session IDs, excluded working directories, sub-agent prioritization, output path, masking preference, silence threshold, and server port. Paths are relative to the configuration file and `~` expands to the user home. The default excludes this viewer project and requires 10 tool calls / 3 responses for Codex or 3 tool calls / 3 responses for Claude. Explicit IDs in `import.sessions` bypass automatic eligibility thresholds.
 
 ```powershell
-# Include more automatically selected cases
-python import_history.py --limit 12
-
-# Inspect a particular session regardless of the automatic threshold
-python import_history.py --session YOUR_THREAD_ID
-
-# Read another installation
-python import_history.py --codex-home C:\path\to\.codex
+# Rebuild using config.yaml
+python import_history.py
+# Reuse unchanged source records
+python import_history.py --incremental
+# Use a separate import configuration
+python import_history.py --config other-config.yaml
 ```
 
+The server uses the application `config.yaml`. Restart it after changing the port; subsequent import jobs read updated import settings.
 Refresh the page after importing. `data/inventory.json` lists scanned sessions and selection metadata. `data/index.json` records import errors and case summaries. A snapshot is not a live tail of running sessions.
 
 ## Start with these cases
@@ -70,7 +71,7 @@ Counts include all imported agents across the full session, including later resu
 - Blue bars: model-issued tool call to matching returned output. Gray optional bars: nested command/tool executions with their own timestamps. These are separate layers, not additive tool counts.
 - Orange arrows: explicit spawn/start relationships and messages received by another agent. Dashed arrows mark starts; solid arrows mark message/report receipt.
 - Purple bars: recorded compaction.
-- The extra **GPU / model wait**, **CPU / tools**, and **Other / annotations** bands share the timeline. Each has one subtrack per agent, so concurrent activity remains visible. Green hatching means inferred model-wait windows; blue means recorded tool envelopes; orange/purple/gray mark waits, compaction, and unclassified time. These are workflow indicators, not measured hardware utilization. Pre/post-processing cannot be isolated from these logs. Click a segment for the derivation and supporting events, or hide the bands with **Show processing indicators**.
+- The extra **GPU / model wait**, **CPU / tools**, and **Other / annotations** bands share the timeline. Each has one subtrack per agent, so concurrent activity remains visible. Green hatching means inferred model-wait windows; blue means recorded tool envelopes excluding inferred stalls in activity bands; orange/purple/gray mark waits, compaction, and unclassified time. These are workflow indicators, not measured hardware utilization. Pre/post-processing cannot be isolated from these logs. Click a segment for the derivation and supporting events, or hide the bands with **Show processing indicators**.
 - Pale lane envelopes: recorded turn boundaries, not continuous model compute.
 - Select any mark or ledger row for usage, tool arguments/results, available message content, and file/line provenance.
 - Token charts and the ledger follow the time window. The token-chart agent selector also controls stored-content composition. Top summary totals cover the whole session.
@@ -91,8 +92,10 @@ Imported traces may contain private prompts, paths, and tool outputs. They stay 
 
 ```text
 swimlane/codex.py   Read-only Codex adapter and normalization
-swimlane/activity.py Derived workflow processing indicators
-import_history.py  Discovery, selection, parent-tree assembly, local snapshots
+swimlane/activity.py Derived workflow indicators and inferred stalls
+swimlane/history.py Harness registry, cached discovery and configurable selection
+config.yaml         Shared server, import, filter and timing settings
+import_history.py  Thin configuration-driven import entry point
 serve.py           Loopback server; only web/ and data/ are served
 web/               Buildless HTML, CSS, JavaScript, SVG visualization
 tests/             Adapter regression, real-data reconciliation, UI logic smoke tests

@@ -4,12 +4,16 @@ import pathlib
 from swimlane.privacy import Anonymizer
 
 
-def build_package(root, scramble=False):
-    index=json.loads((root/'data/index.json').read_text(encoding='utf-8'))
+def build_package(root, scramble=False, data_directory=None, snapshot_index=None):
+    if data_directory is None:
+        from swimlane.config import load_config, resolve_path
+        config=load_config(root/'config.yaml')
+        data_directory=resolve_path(config,config['import']['output'])
+    index=json.loads(json.dumps(snapshot_index)) if snapshot_index is not None else json.loads((data_directory/'index.json').read_text(encoding='utf-8'))
     privacy=Anonymizer()
     payload={}
     for row in index['cases']:
-        case=json.loads((root/'data'/row['file']).read_text(encoding='utf-8'))
+        case=json.loads((data_directory/row['file']).read_text(encoding='utf-8'))
         if scramble:
             case=privacy.transform(case)
             case['title']='Session '+case['id'][:12]
@@ -29,12 +33,13 @@ def build_package(root, scramble=False):
     bootstrap="const packagedData="+encoded+";window.fetch=async url=>({ok:!!packagedData[url],status:packagedData[url]?200:404,json:async()=>packagedData[url]});"
     html=(root/'web/index.html').read_text(encoding='utf-8')
     html=html.replace('<link rel="stylesheet" href="/style.css">','<style>'+(root/'web/style.css').read_text(encoding='utf-8')+'</style>')
-    for name in ('timeline.js','app.js','import.js'):
+    for name in ('timeline.js','app.js','import.js','summary.js'):
         replacement='' if name=='import.js' else '<script>'+ (bootstrap if name=='timeline.js' else '')+(root/'web'/name).read_text(encoding='utf-8').replace('</script','<\\/script')+'</script>'
         # Inline scripts must run after the document elements exist.
         html=html.replace('<script src="/'+name+'" defer></script>','')
         html=html.replace('</body>',replacement+'</body>')
-    html=html.replace('<button id="importButton" class="button">Import local history</button>','<p>Offline snapshot · local imports require the application server.</p>')
+    html=html.replace('<button id="importButton" class="button">Scan new sessions</button>','<p>Offline snapshot · local imports require the application server.</p>')
+    html=html.replace('<button id="rebuildButton" class="button">Refresh all sessions</button>','')
     html=html.replace('<button id="packageButton" class="button">Create package ↓</button>','')
     return html
 

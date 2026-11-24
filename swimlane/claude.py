@@ -8,11 +8,12 @@ def normalize(path):
     records = list(read_events(path))
     sid = 'claude-'+path.stem
     a = dict(id=sid, harness='claude', path='/root', parent_id=None, nickname=None, cli_version=None,
-             turns=[], rounds=[], spans=[], messages=[], content_chars={}, notices=[])
+             turns=[], rounds=[], spans=[], messages=[], content_chars={}, notices=[], cwd=None)
     calls, responses, seen = {}, {}, set()
     turn = None
     title = ''
     for e in records:
+        a['cwd']=e.get('cwd') or a['cwd']
         typ=e.get('type'); msg=e.get('message') or {}; t=millis(e.get('timestamp'))
         if typ not in ('user','assistant') or not t: continue
         blocks=msg.get('content',[])

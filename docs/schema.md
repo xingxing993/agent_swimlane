@@ -63,3 +63,12 @@ Edges contain `id`, `kind` (`spawn`, `message`, `report`), `from`, `to`, `time`,
 - Do not count mirrored event streams twice.
 - Include internal agents only with explicit relationships or as separate roots; do not assign guardians by proximity.
 - Keep request latency, context composition, send-time, and shutdown-time unavailable unless the source actually establishes them.
+
+
+## Silence and model metadata
+
+Cases may include `timing_policy: {silence_seconds: 120}`. Activity phase `stall` has resource `other` and confidence `inferred`: a gap between consecutive observations exceeding that threshold, clipped to the turn. It overrides tool, wait, compaction and model-candidate classifications; no observations establish its cause. Tool call/result envelopes are preserved in `spans`. Net time removes the union of gaps outside all agents' retained activity. Per-agent classified durations can overlap across agents and must not be interpreted as elapsed team time or hardware utilization.
+
+`model` uses explicit event model metadata or the adapter's recorded model context. Missing names remain null and display as unavailable; they are never guessed from harness or tool names. The event ledger and inspector expose this field.
+
+`/api/library` discovers normalized case JSON files in the configured data directory and deduplicates by harness/session ID. Index rows marked `local_import: true` are owned by the local importer; shared external files should remain unindexed or use `local_import: false` to survive import replacement.

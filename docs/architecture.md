@@ -101,7 +101,7 @@ The requested labels are useful for understanding the workflow, but the history 
 4. Split the turn at all candidate interval boundaries. For each small interval, choose evidence with this precedence: incomplete-tool uncertainty; explicit wait/compaction; tool execution; model-wait candidate; unclassified remainder.
 5. Merge adjacent segments only when their classification and supporting evidence are identical.
 
-This avoids counting a wrapper and nested execution twice in one agent's activity bands. It also prevents an overnight gap **between turns** from becoming a giant inference span. It cannot eliminate uninstrumented waiting inside a turn; inferred green windows can still include network latency, queueing, and harness work.
+This avoids counting a wrapper and nested execution twice in one agent's activity bands. It also prevents an overnight gap **between turns** from becoming a giant inference span. Long observation gaps inside a turn now become inferred stalls before other phase classification. Shorter inferred green windows can still include network latency, queueing, and harness work. Silence does not establish a specific cause.
 
 ### A concrete example
 
@@ -148,3 +148,12 @@ The app uses plain HTML/CSS/JavaScript and SVG, with no frontend build step. `se
 5. `tests/test_codex.py` and `tests/test_activity.py`: measurement invariants and edge cases.
 
 Tests reconcile real imported usage with final source totals and cover duplicated records, encrypted text, partial writes, parallel tool returns, phase precedence, open tools, between-turn gaps, and overlapping agents. UI logic tests exercise rendering and controls, but they do not substitute for visual browser QA.
+
+
+## Configuration, cached scans, and summary
+
+`config.yaml` is the shared settings source. `import_history.py` delegates to the harness registry in `swimlane/history.py`; discovery, eligibility and selection use configured per-source rules. Codex retains explicit parent-tree assembly; Claude does not invent missing child links. Incremental scans reuse source records when size and nanosecond modification time match. Full refresh bypasses the cache. Cached normalized records are private plaintext under `.runtime/`, independently of published masking. Cached data is used before optional anonymization, so exports can apply fresh masks consistently.
+
+Long gaps between consecutive observations are inferred stalls, including gaps inside tool envelopes. Nested execution records or transcript observations break a gap. This classification takes precedence over existing activity candidates without changing recorded events. The viewer also applies this policy to legacy activity bands. Net time unions retained intervals across agents before removing gaps; another agent's observations keep parallel work visible. Disabling Net time restores calendar spacing.
+
+`web/summary.js` computes charts from normalized cases, with no raw transcript parsing in the UI. Refresh uses `/api/library` to discover cases copied into the data folder; offline packages use their embedded index. Sessions, sub-agents, calls and response counts are structural totals. Tokens follow the common inclusive accounting contract. Wall and net elapsed are summed per session; classified agent time is a separate overlapping measure.

@@ -4,7 +4,20 @@
 WAIT_TOOLS = {"wait", "wait_agent", "sleep", "request_user_input", "request_user_input_async"}
 
 
-def derive_activity(agent):
+def observation_gaps(agent, threshold=120000):
+    """Silence between observations, including inside tool and turn envelopes.
+
+    A duration is not evidence of computation. Never claim the cause is known.
+    Nested observations break a gap even when a wrapper call remains open.
+    """
+    points = {p for e in agent['rounds']+agent['spans']+agent['messages']
+              for p in (e.get('time'), e.get('start'), e.get('end')) if p is not None}
+    points.update(p for t in agent['turns'] for p in (t['start'], t.get('end')) if p is not None)
+    points = sorted(points)
+    return [(lo, hi) for lo, hi in zip(points, points[1:]) if hi-lo > threshold]
+
+
+def derive_activity(agent, silence_threshold=120000):
     """Partition each observed turn; never stretch intervals over between-turn gaps.
 
     Precedence: explicit waits/compaction > tool envelopes > response-window
@@ -12,6 +25,7 @@ def derive_activity(agent):
     """
     result = []
     spans = agent["spans"]
+    gaps = observation_gaps(agent, silence_threshold)
     for turn in agent["turns"]:
         start = turn["start"]
         # An unfinished turn stops at its last evidence, not at wall-clock now.
@@ -26,6 +40,10 @@ def derive_activity(agent):
             if hi > lo:
                 candidates.append(dict(start=lo, end=hi, resource=resource, phase=phase,
                                        priority=priority, refs=refs, confidence=confidence, explanation=explanation))
+
+        for lo, hi in gaps:
+            add(lo, hi, 'other', 'stall', 10, [], 'inferred',
+                'No recorded observations inside this long interval. Possible suspension, pending approval, sleep, remote wait, or unobserved work. Classified as inferred stall/out of scope, not measured CPU or model time. Original call/result boundaries are preserved.')
 
         for e in spans:
             if e["kind"] not in ("tool", "execution", "compaction"):
@@ -74,7 +92,7 @@ def derive_activity(agent):
                 result[-1]["end"] = hi
                 continue
             ref = next(iter(refs.values()), None)
-            names = {"model_candidate":"GPU / model wait (inferred)", "tool":"CPU / tool envelope", "wait":"Other / explicit wait", "compaction":"Other / compaction", "unknown":"Other / unclassified"}
+            names = {"stall":"Other / inferred stall (out of scope)", "model_candidate":"GPU / model wait (inferred)", "tool":"CPU / tool envelope", "wait":"Other / explicit wait", "compaction":"Other / compaction", "unknown":"Other / unclassified"}
             result.append({"id":f"{agent['id']}:activity:{len(result)}", "agent_id":agent["id"], "kind":"activity",
                            "resource":winner["resource"], "phase":winner["phase"], "label":names[winner["phase"]],
                            "time":lo, "start":lo, "end":hi, "turn_id":turn["id"], "model":ref.get("model") if ref else None,
