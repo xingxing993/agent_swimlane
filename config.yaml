@@ -1,0 +1,31 @@
+# Paths are relative to this file; ~ expands to the current user home.
+server:
+  port: 8765
+import:
+  output: data
+  anonymize: false
+  exclude_current_project: true
+  excluded_paths: []
+  sessions: []
+  prefer_subagents: true
+  sources:
+    codex:
+      enabled: true
+      home: ~/.codex
+      directories: [sessions, archived_sessions]
+      patterns: ['*.jsonl', '*.jsonl.zst']
+      min_calls: 10
+      min_responses: 3
+      limit: 100000
+    claude:
+      enabled: true
+      home: ~/.claude
+      directories: [projects]
+      patterns: ['*.jsonl']
+      excluded_parts: [subagents]
+      min_calls: 3
+      min_responses: 3
+      limit: 100000
+timing:
+  # Silence is inferred stall, not proof of sleep or inactivity.
+  silence_seconds: 120
